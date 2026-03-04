@@ -6,6 +6,10 @@ const router = express.Router();
 const dotenv = require('dotenv');
 const pino = require('pino');  // Import Pino logger
 
+//Task 1: Use the `body`,`validationResult` from `express-validator` for input validation
+const { body, validationResult } = require('express-validator');
+
+
 const logger = pino();  // Create a Pino logger instance
 
 dotenv.config();
@@ -94,4 +98,58 @@ router.post('/login', async (req, res) => {
     }
 });
 
+// update API
+router.put('/update', async (req, res) => {
+    // Task 2: Validate the input using `validationResult` and return approiate message if there is an error.
+
+    const errors = validationResult(req);
+
+    // Task 3: Check if `email` is present in the header and throw an appropriate error message if not present.
+    if (!errors.isEmpty()) {
+        logger.error('Validation errors in update request', errors.array());
+        return res.status(400).json({ errors: errors.array() });
+    }
+
+    try {
+        const email = req.headers.email;
+
+        if (!email) {
+            logger.error('Email not found in the request headers');
+            return res.status(400).json({ error: "Email not found in the request headers" });
+        }
+
+        const db = await connectToDatabase();
+        const collection = db.collection("users");
+
+        const existingUser = await collection.findOne({ email });
+
+        if (!existingUser) {
+            logger.error('User not found');
+            return res.status(404).json({ error: "User not found" });
+        }
+
+        existingUser.firstName = req.body.name;
+        existingUser.updatedAt = new Date();
+
+        const updatedUser = await collection.findOneAndUpdate(
+            { email },
+            { $set: existingUser },
+            { returnDocument: 'after' }
+        );
+
+        const payload = {
+            user: {
+                id: updatedUser._id.toString(),
+            },
+        };
+
+        const authtoken = jwt.sign(payload, JWT_SECRET);
+        logger.info('User updated successfully');
+
+        res.json({ authtoken });
+    } catch (error) {
+        logger.error(error);
+        return res.status(500).send("Internal Server Error");
+    }
+});
 module.exports = router;
