@@ -1,5 +1,6 @@
 const express = require("express");
 const connectToDatabase = require('../models/db');
+const authMiddleware = require('../middleware/authMiddleware');
 
 const router = express.Router();
 router.get('/', async (req, res) => {
@@ -48,7 +49,7 @@ router.get('/:id', async (req, res) => {
 
 
 // Add a new gift
-router.post('/', async (req, res, next) => {
+router.post('/', authMiddleware, async (req, res, next) => {
     try {
         const db = await connectToDatabase();
         const collection = db.collection("gifts");

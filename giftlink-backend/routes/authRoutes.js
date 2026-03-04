@@ -16,7 +16,18 @@ dotenv.config();
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
-router.post('/register', async (req, res) => {
+router.post('/register', [
+    body('email').isEmail().withMessage('Please provide a valid email'),
+    body('firstName').notEmpty().withMessage('First name is required'),
+    body('lastName').notEmpty().withMessage('Last name is required'),
+    body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters long')
+], async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        logger.error('Validation errors in register request', errors.array());
+        return res.status(400).json({ errors: errors.array() });
+    }
+
     try {
         // Task 1: Connect to `giftsdb` in MongoDB through `connectToDatabase` in `db.js`
         const db = await connectToDatabase();
@@ -61,11 +72,19 @@ router.post('/register', async (req, res) => {
 });
 
 //Login Endpoint
-router.post('/login', async (req, res) => {
+router.post('/login', [
+    body('email').isEmail().withMessage('Please provide a valid email'),
+    body('password').notEmpty().withMessage('Password is required')
+], async (req, res) => {
     console.log("\n\n Inside login")
 
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        logger.error('Validation errors in login request', errors.array());
+        return res.status(400).json({ errors: errors.array() });
+    }
+
     try {
-        // const collection = await connectToDatabase();
         const db = await connectToDatabase();
         const collection = db.collection("users");
         const theUser = await collection.findOne({ email: req.body.email });
@@ -98,48 +117,52 @@ router.post('/login', async (req, res) => {
     }
 });
 
+const authMiddleware = require('../middleware/authMiddleware');
+
 // update API
-router.put('/update', async (req, res) => {
+router.put('/update', authMiddleware, async (req, res) => {
     // Task 2: Validate the input using `validationResult` and return approiate message if there is an error.
 
     const errors = validationResult(req);
 
-    // Task 3: Check if `email` is present in the header and throw an appropriate error message if not present.
+    // Task 3: Check if there are validation errors
     if (!errors.isEmpty()) {
         logger.error('Validation errors in update request', errors.array());
         return res.status(400).json({ errors: errors.array() });
     }
 
     try {
-        const email = req.headers.email;
+        const userId = req.user.id;
 
-        if (!email) {
-            logger.error('Email not found in the request headers');
-            return res.status(400).json({ error: "Email not found in the request headers" });
+        if (!userId) {
+            logger.error('User ID not found in the token payload');
+            return res.status(400).json({ error: "User ID not found in the token payload" });
         }
 
         const db = await connectToDatabase();
         const collection = db.collection("users");
 
-        const existingUser = await collection.findOne({ email });
+        const { ObjectId } = require('mongodb');
+        const existingUser = await collection.findOne({ _id: new ObjectId(userId) });
 
         if (!existingUser) {
             logger.error('User not found');
             return res.status(404).json({ error: "User not found" });
         }
 
-        existingUser.firstName = req.body.name;
+        existingUser.firstName = req.body.firstName || req.body.name || existingUser.firstName;
+        existingUser.lastName = req.body.lastName || existingUser.lastName;
         existingUser.updatedAt = new Date();
 
         const updatedUser = await collection.findOneAndUpdate(
-            { email },
+            { _id: new ObjectId(userId) },
             { $set: existingUser },
             { returnDocument: 'after' }
         );
 
         const payload = {
             user: {
-                id: updatedUser._id.toString(),
+                id: userId,
             },
         };
 
