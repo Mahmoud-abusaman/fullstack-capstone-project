@@ -76,7 +76,7 @@ router.post('/login', [
     body('email').isEmail().withMessage('Please provide a valid email'),
     body('password').notEmpty().withMessage('Password is required')
 ], async (req, res) => {
-    console.log("\n\n Inside login")
+    console.log("\n\n Inside login");
 
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -90,7 +90,7 @@ router.post('/login', [
         const theUser = await collection.findOne({ email: req.body.email });
 
         if (theUser) {
-            let result = await bcryptjs.compare(req.body.password, theUser.password)
+            let result = await bcryptjs.compare(req.body.password, theUser.password);
             if (!result) {
                 logger.error('Passwords do not match');
                 return res.status(404).json({ error: 'Wrong pasword' });
